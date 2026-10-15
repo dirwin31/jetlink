@@ -33,6 +33,15 @@ let linux: [Platform] = [.linux, .android]
   let tensorRT: String? = nil
 #endif
 
+// Experimental, locally built ORT; path relative to JetlinkKit (SwiftPM requires it).
+// The default remains the checksum-pinned release.
+let ortBinary: Target = Context.environment["JETLINK_ORT_XCFRAMEWORK"].map {
+  .binaryTarget(name: "onnxruntime", path: $0)
+} ?? .binaryTarget(
+  name: "onnxruntime",
+  url: "https://download.onnxruntime.ai/pod-archive-onnxruntime-c-1.29.0.zip",
+  checksum: "ab89ea27b074201b83c12526d7f7206b916ecd5315174d372d6c27b659e49860")
+
 let crypto: Target.Dependency = .product(name: "Crypto", package: "swift-crypto", condition: .when(platforms: linux))
 
 let package = Package(
@@ -63,10 +72,7 @@ let package = Package(
     // onnxruntime's own iOS/macOS build, the archive its CocoaPods pod and Swift
     // package ship: a static xcframework with device, simulator and macOS
     // slices, of the release Pinned names (1.29.0).
-    .binaryTarget(
-      name: "onnxruntime",
-      url: "https://download.onnxruntime.ai/pod-archive-onnxruntime-c-1.29.0.zip",
-      checksum: "ab89ea27b074201b83c12526d7f7206b916ecd5315174d372d6c27b659e49860"),
+    ortBinary,
     .target(
       name: "COrt",
       dependencies: [.target(name: "onnxruntime", condition: .when(platforms: apple))],

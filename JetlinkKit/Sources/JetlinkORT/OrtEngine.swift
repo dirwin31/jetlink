@@ -63,7 +63,8 @@ public struct SessionPlan: Sendable, Equatable {
 /// reads `output(_:)`. The trunk's outputs feed the policy by name without
 /// leaving the engine, and after `loopState` a stateful graph's next_state_
 /// outputs feed its state_ inputs on the next run by swapping two buffers:
-/// the 12 MB of queues never cross to the host.
+/// the queues are not copied by JetLink between runs. The execution provider
+/// may still copy them between its own output storage and these CPU bindings.
 public final class OrtEngine: EngineCore, @unchecked Sendable {
   public let device: String
   public let providers: [String]
@@ -72,6 +73,14 @@ public final class OrtEngine: EngineCore, @unchecked Sendable {
   public var keepsCPUWarm: Bool { keepWarm != nil || hint != nil }
   public override var notes: String { "CPU keep-warm \(keepsCPUWarm ? "on" : "off")" }
   public override var coolsWhenIdle: Bool { usesNeuralEngine }
+
+  private let timingLog = ServerLog(category: "ort-timing")
+  private let sessionNames: [String]
+  private var sessionTimings: [SessionTiming]?
+
+  /// Wall time including provider copies and synchronization, not GPU event time.
+  /// Access under the same host lock that protects run()/flushTiming().
+  var timingSummaries: [SessionTiming.Summary] { sessionTimings?.map { $0.summary() } ?? [] }
 
   private let chain: [OrtSession]
   private var bindings: [[OrtBinding]] = []  // [parity][session]
@@ -82,11 +91,20 @@ public final class OrtEngine: EngineCore, @unchecked Sendable {
 
   /// `keepAlive` keeps the GPU clocked up between frames, `keepCPUWarm` the
   /// CPU; each only where a plan runs on that unit.
-  public init(plans: [SessionPlan], device: String, keepAlive: Bool = true, keepCPUWarm: Bool = true) throws {
+  public init(
+    plans: [SessionPlan], device: String, keepAlive: Bool = true, keepCPUWarm: Bool = true,
+    profileSessions: Bool? = nil
+  ) throws {
     self.device = device
+    sessionNames = plans.map { "\($0.model.lastPathComponent):\($0.label)" }
+    let profiling =
+      profileSessions ?? (ProcessInfo.processInfo.environment["JETLINK_PROFILE_SESSIONS"] == "1")
+    sessionTimings = profiling ? plans.map { _ in SessionTiming() } : nil
     var chain: [OrtSession] = []
     for plan in plans {
-      chain.append(try OrtSession(model: plan.model, provider: plan.provider, options: plan.options, threads: plan.threads))
+      chain.append(
+        try OrtSession(
+          model: plan.model, provider: plan.provider, options: plan.options, threads: plan.threads))
     }
     self.chain = chain
     self.providers = plans.map(\.label)
@@ -148,7 +166,9 @@ public final class OrtEngine: EngineCore, @unchecked Sendable {
       for session in chain {
         let ins = session.inputs.map { ($0, buffer($0.name, parity: p)!) }
         let outs = session.outputs.map { spec -> (TensorSpec, UnsafeMutableRawPointer) in
-          guard let input = outputOf[spec.name] else { return (spec, buffer(spec.name, parity: p)!) }
+          guard let input = outputOf[spec.name] else {
+            return (spec, buffer(spec.name, parity: p)!)
+          }
           // writes the buffer the state_ input reads next run
           return (spec, buffer(input, parity: p ^ 1)!)
         }
@@ -172,8 +192,26 @@ public final class OrtEngine: EngineCore, @unchecked Sendable {
   }
 
   public override func execute() throws {
-    for binding in bindings[parity] {
-      try binding.run()
+    guard sessionTimings != nil else {
+      for binding in bindings[parity] { try binding.run() }
+      return
+    }
+    for (index, binding) in bindings[parity].enumerated() {
+      let started = DispatchTime.now().uptimeNanoseconds
+      do {
+        try binding.run()
+        sessionTimings![index].record(DispatchTime.now().uptimeNanoseconds - started)
+      } catch {
+        sessionTimings![index].failed += 1
+        throw error
+      }
+    }
+  }
+
+  public override func flushTiming() {
+    for (name, summary) in zip(sessionNames, timingSummaries)
+    where summary.completed > 0 || summary.failed > 0 {
+      timingLog.info("session \(name) wall time: \(summary.description)")
     }
   }
 
@@ -181,11 +219,13 @@ public final class OrtEngine: EngineCore, @unchecked Sendable {
   /// second is the steady state.
   public override func warm() throws -> String {
     _ = try super.warm()
-    return "onnxruntime \(OrtRuntime.version) on \(device) in process, sessions \(providers.joined(separator: " then "))"
+    return
+      "onnxruntime \(OrtRuntime.version) on \(device) in process, sessions \(providers.joined(separator: " then "))"
   }
 
   public override func close() {
     guard !isClosed else { return }
+    flushTiming()
     keepAlive?.close()
     keepWarm?.close()
     hint?.close()

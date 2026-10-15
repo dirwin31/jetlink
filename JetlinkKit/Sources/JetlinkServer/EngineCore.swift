@@ -46,6 +46,8 @@ open class EngineCore: Engine, @unchecked Sendable {
   public private(set) var parity = 0
   /// Wall time of the last `run()`.
   public private(set) var lastRunNanoseconds: UInt64 = 0
+  /// Legacy wire field: base/ORT engines report whole execute() wall time here,
+  /// including provider overhead. This is not isolated GPU execution time.
   public private(set) var lastGpuUs: UInt32 = 0
   public private(set) var isClosed = false
 

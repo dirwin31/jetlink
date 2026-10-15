@@ -1,0 +1,94 @@
+--- a/onnxruntime/core/providers/coreml/model/model.mm
++++ b/onnxruntime/core/providers/coreml/model/model.mm
+@@ -8,6 +8,9 @@
+ 
+ #include <algorithm>
+ #include <cstdint>
++#include <cstdlib>
++#include <cstring>
++#include <limits>
+ #include <optional>
+ #include <unordered_map>
+ #include <vector>
+@@ -627,6 +630,66 @@
+         ORT_RETURN_IF_ERROR(CreateInputFeatureProvider(inputs, logger_, &input_features, conversion_buffers));
+ 
+         MLPredictionOptions* options = [[MLPredictionOptions alloc] init];
++        // JetLink experiment: opt in only on a custom runtime build. Resolve
++        // destinations on EVERY invocation: recurrent I/O bindings alternate.
++        // Never retry a failed prediction: execution may have side effects.
++        NSMutableDictionary<NSString*, MLMultiArray*>* backings = [NSMutableDictionary dictionary];
++        static const bool use_output_backings = [] {
++          const char* value = std::getenv("JETLINK_COREML_OUTPUT_BACKINGS");
++          return value != nullptr && std::strcmp(value, "1") == 0;
++        }();
++        if (@available(macOS 11.0, iOS 16.0, *)) {
++          if (use_output_backings) {
++            for (const auto& [name, info] : outputs) {
++              // Dynamic, scalar, empty and converted outputs retain the normal path.
++              if (info.shape.empty()) continue;
++              MLMultiArrayDataType type;
++              size_t item_size;
++              switch (info.data_type) {
++                case ONNX_NAMESPACE::TensorProto_DataType_FLOAT:
++                  type = MLMultiArrayDataTypeFloat32; item_size = 4; break;
++                case ONNX_NAMESPACE::TensorProto_DataType_FLOAT16:
++                  type = MLMultiArrayDataTypeFloat16; item_size = 2; break;
++                case ONNX_NAMESPACE::TensorProto_DataType_INT32:
++                  type = MLMultiArrayDataTypeInt32; item_size = 4; break;
++                default: continue;
++              }
++              int64_t elements = 1;
++              bool valid = true;
++              for (auto dim : info.shape) {
++                if (dim <= 0 || elements > std::numeric_limits<int64_t>::max() / dim) {
++                  valid = false;
++                  break;
++                }
++                elements *= dim;
++              }
++              if (!valid || static_cast<uint64_t>(elements) > std::numeric_limits<size_t>::max() / item_size) continue;
++              NSMutableArray<NSNumber*>* shape = [NSMutableArray arrayWithCapacity:info.shape.size()];
++              NSMutableArray<NSNumber*>* strides = [NSMutableArray arrayWithCapacity:info.shape.size()];
++              int64_t stride = elements;
++              for (auto dim : info.shape) {
++                [shape addObject:@(dim)];
++                stride /= dim;
++                [strides addObject:@(stride)];
++              }
++              void* destination = get_output_tensor_mutable_raw_data_fn(name, info.data_type, info.shape);
++              NSError* backing_error = nil;
++              MLMultiArray* backing = [[MLMultiArray alloc] initWithDataPointer:destination
++                                                                       shape:shape
++                                                                    dataType:type
++                                                                     strides:strides
++                                                                 deallocator:^(void*) {}
++                                                                       error:&backing_error];
++              NSString* key = util::Utf8StringToNSString(name.c_str());
++              MLFeatureDescription* description = model_.modelDescription.outputDescriptionsByName[key];
++              if (backing != nil && backing_error == nil && description != nil &&
++                  [description isAllowedValue:[MLFeatureValue featureValueWithMultiArray:backing]]) {
++                backings[key] = backing;
++              }
++            }
++            options.outputBackings = backings;
++          }
++        }
+         NSError* error = nil;
+         id<MLFeatureProvider> output_features = [model_ predictionFromFeatures:input_features
+                                                                        options:options
+@@ -677,6 +740,14 @@
+             int64_t stride = 0;
+ 
+             ORT_RETURN_IF_ERROR(GetMLMultiArrayCopyInfo(data, num_blocks, block_size, stride));
++
++            // Apple documents object identity as the acceptance test. Also
++            // check the pointer and layout before omitting the provider copy.
++            MLMultiArray* requested = backings[util::Utf8StringToNSString(output_name.c_str())];
++            if (requested != nil && data == requested && data.dataPointer == output_buffer &&
++                stride == block_size) {
++              continue;
++            }
+ 
+             __block Status copy_status;
+             const auto* tensor_info = &output_tensor_info;
