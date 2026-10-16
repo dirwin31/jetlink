@@ -78,7 +78,7 @@ struct ServerHooksTests {
   @Test("The hello carries Python's keys, the host's sleep_after and what the backend adds")
   func hello() throws {
     let python: Set = [
-      "protocol", "backend", "runtime_version", "device", "engine_state", "loaded", "frames_served", "cached_models", "telemetry", "sleep_after",
+      "protocol", "backend", "runtime_version", "device", "engine_state", "loaded", "active", "frames_served", "cached_models", "telemetry", "sleep_after",
     ]
     try serve(hooks: ServerHooks()) { _, client in
       let hello = try client.hello()

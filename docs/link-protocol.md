@@ -20,7 +20,10 @@ bench tools). There is one version: update the comma and Jetlink together.
   hidden state are current and warm when it takes over. The server cannot
   tell the two apart. Until the first frame goes out it pings; a server that
   has not heard this comma's hello (it restarted meanwhile) answers with an
-  error, and the comma says hello again.
+  error, and the comma says hello again. The hello reply's `active` is the
+  engine the server has loaded or is getting ready, `{sha256, state, detail}`
+  or null; its `engine_state` is that of what the connection asked for, which
+  at a hello is nothing yet, `none`.
 - **Late replies.** With the big model driving, a reply not back 46 ms into
   the frame is not waited for: the comma publishes the previous frame's
   output again and reads the late reply with the next frame's. Five of those

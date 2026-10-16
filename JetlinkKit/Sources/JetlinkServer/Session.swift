@@ -262,6 +262,7 @@ final class Session: @unchecked Sendable {
       "protocol": Int(Wire.version),
       "engine_state": host.status(sha, frameSkip: skip)["state"] ?? "none",
       "loaded": host.loadedSHA() ?? NSNull(),
+      "active": host.active() ?? NSNull(),
       "frames_served": frames,
       "cached_models": host.cache.inventory(),
       "telemetry": host.telemetry.read(),

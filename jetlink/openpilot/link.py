@@ -325,6 +325,21 @@ def stand_in(parts, hello: dict, pick: str, built) -> tuple[str, int] | None:
   return None
 
 
+def serving(parts, hello: dict) -> str:
+  """What the server has, by name, for the log: the engine its hello calls
+  active, loaded or getting ready, with its state. A server from before
+  `active` names only what it has loaded. Not the hello's engine_state: that
+  is the state of what this connection asked for, nothing yet, so "none"."""
+  active = hello.get('active')
+  if isinstance(active, dict) and active.get('sha256'):
+    sha256, state = active['sha256'], active.get('state') or 'unknown'
+  elif hello.get('loaded'):
+    sha256, state = hello['loaded'], 'ready'
+  else:
+    return 'no model'
+  return f"{parts.models.name_for(str(sha256))} ({state})"
+
+
 def open_link(parts, link: Link, should_stop=None):
   """Get a client and a spec. Link IO only, so it is safe off modeld's thread;
   everything that touches tinygrad stays in the joining state's build.
@@ -347,9 +362,8 @@ def open_link(parts, link: Link, should_stop=None):
   client = connect_patiently(link)
   try:
     hello = client.hello(timeout=10.0)
-    parts.log.warning("jetlink: %s trt %s, engine %s, loaded %s",
-                   hello.get('device'), hello.get('trt_version'),
-                   hello.get('engine_state'), str(hello.get('loaded'))[:16])
+    parts.log.warning("jetlink: %s trt %s, serving %s", hello.get('device'), hello.get('trt_version'),
+                      serving(parts, hello))
     link.note_server(hello)
     sha256, nbytes = identity(parts, selected)
     path = parts.models.shipped_model_path()

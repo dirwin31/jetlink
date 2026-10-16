@@ -279,6 +279,23 @@ struct ServerTests {
       #expect(try again.recv(.engineResp).json["state"] as? String == "ready")
     }
   }
+
+  @Test("A hello names the engine the server has, ready, where engine_state says none")
+  func helloNamesTheActiveEngine() throws {
+    let golden = try Golden("tiny_stateful")
+    try serve { server, client in
+      #expect(try client.hello()["active"] is NSNull, "nothing loaded or loading")
+      _ = try client.ensureEngine(model: golden.model, sha256: golden.sha256)
+      client.close()
+      let again = try TestClient(port: server.port!)
+      defer { again.close() }
+      let hello = try again.hello()
+      #expect(hello["engine_state"] as? String == "none", "this connection has asked for nothing yet")
+      let active = hello["active"] as? [String: Any]
+      #expect(active?["sha256"] as? String == golden.sha256)
+      #expect(active?["state"] as? String == "ready")
+    }
+  }
 }
 
 /// The listener beside the sessions: it heals, and stopping keeps the engine.

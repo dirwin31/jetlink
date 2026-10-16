@@ -45,8 +45,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / 'JetlinkKit'
 FIXTURES = PACKAGE / 'Tests' / 'JetlinkServerTests' / 'Fixtures'
 QUEUED, STATEFUL = FIXTURES / 'tiny_queued.onnx', FIXTURES / 'tiny_stateful.onnx'
-HELLO_KEYS = {'protocol', 'backend', 'runtime_version', 'device', 'engine_state', 'loaded', 'frames_served', 'cached_models',
-              'telemetry', 'sleep_after'}
+HELLO_KEYS = {'protocol', 'backend', 'runtime_version', 'device', 'engine_state', 'loaded', 'active', 'frames_served',
+              'cached_models', 'telemetry', 'sleep_after'}
 
 
 def _binary() -> Path | None:

@@ -308,7 +308,15 @@ class BuildingOnroad(OpenpilotTest):
     assert spec is self.spec and client is self.client
     assert self.ensure.call_args.args[2:4] == (self.ENTRY['oid'], self.ENTRY['size'])
     assert self.op.log.has('CTM v2 is not built yet, building it with the small model driving')
-    assert self.op.log.has(f"orin trt 10.3, engine ready, loaded {'a' * 16}")
+    assert self.op.log.has(f"orin trt 10.3, serving {'a' * 16} (ready)"), 'a server from before active: its loaded'
+
+  def test_the_hello_names_what_the_server_is_serving(self):
+    self.patch(self.parts.models, 'name_for', return_value='Cinque Terre V3')
+    hello = {'device': 'ane-Apple_M1', 'trt_version': None, 'engine_state': 'none', 'loaded': None}
+    for active, says in (({'sha256': 'a' * 64, 'state': 'ready', 'detail': ''}, 'Cinque Terre V3 (ready)'),
+                         ({'sha256': 'a' * 64, 'state': 'building', 'detail': 'loading engine'}, 'Cinque Terre V3 (building)'),
+                         (None, 'no model')):
+      assert link.serving(self.parts, {**hello, 'active': active}) == says
 
   def test_the_last_model_built_drives_while_the_pick_is_not_ready(self):
     # the user's choice (2026-10-06): not the small model. No upload and no

@@ -213,6 +213,23 @@ public final class EngineHost: @unchecked Sendable {
     return loaded?.sha256
   }
 
+  /// The engine this host is serving or getting ready, whoever asked for it:
+  /// a hello's `active`. A job in flight or failed is it, since a job unloads
+  /// what was there first; otherwise the loaded engine, ready. Nil with neither.
+  /// A hello's `engine_state` is the state of what that connection asked for,
+  /// which at a hello is nothing yet, so it says "none" with a model loaded.
+  public func active() -> [String: Any]? {
+    lock.lock()
+    defer { lock.unlock() }
+    if let job, job.state != .ready {
+      return ["sha256": job.sha256, "state": job.state.rawValue, "detail": job.detail]
+    }
+    if let loaded {
+      return ["sha256": loaded.sha256, "state": "ready", "detail": ""]
+    }
+    return nil
+  }
+
   // MARK: requests
 
   /// Make `request` the model being served, starting whatever that takes.
