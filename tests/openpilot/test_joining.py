@@ -518,7 +518,7 @@ class JoiningTest(JoiningBase):
       t = time.monotonic()
       s._back_off()
       delays.append(round(s._rejoin_at - t))
-    self.assertEqual(delays, [1, 1, 1, 5, 10, 20, 40, 60])
+    self.assertEqual(delays, [1, 1, 1, 5, 10, 20, 20, 20])
 
     # A join that held is not that link, and must not inherit its delay: a
     # link that ran for minutes and then went is a USB drop, and the host

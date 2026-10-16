@@ -230,8 +230,9 @@ class TestWire(ModelStateTest):
 
 
 class TestProving(ModelStateTest):
-  """The second after a swap is the large model's proof: a single held frame
-  in its first PROVING_FRAMES is behind, before anyone can engage."""
+  """The second after a swap is the large model's proof: more than
+  PROVING_HOLDS_ALLOWED held frames in its first PROVING_FRAMES is behind,
+  before anyone can engage."""
 
   def late_at(self, late: set[int], n: int):
     client = FakeClient()
@@ -244,22 +245,36 @@ class TestProving(ModelStateTest):
       behind.append(state.behind)
     return behind
 
-  def test_a_held_frame_while_proving_is_behind(self):
-    behind = self.late_at({7}, n=8)
-    self.assertEqual(behind[:6], [None] * 6)
-    self.assertEqual(behind[6], f'held frame 7 of the first {model_state.PROVING_FRAMES}')
-    self.assertIsNone(behind[7], 'said once, for the frame that held')
+  def test_a_held_frame_past_the_allowance_while_proving_is_behind(self):
+    allowed = model_state.PROVING_HOLDS_ALLOWED
+    late = set(range(5, 5 + 2 * (allowed + 1), 2))   # spread out, never in a row
+    last = max(late)
+    behind = self.late_at(late, n=last + 1)
+    self.assertEqual(behind[:last - 1], [None] * (last - 1), 'the allowance is forgiven')
+    self.assertEqual(behind[last - 1], f'held frame {last} of the first {model_state.PROVING_FRAMES}, {allowed + 1} held')
+    self.assertIsNone(behind[last], 'said once, for the frame that held')
+
+  def test_the_allowance_is_forgiven_while_proving(self):
+    late = set(range(5, 5 + 2 * model_state.PROVING_HOLDS_ALLOWED, 2))
+    n = model_state.PROVING_FRAMES + 5
+    self.assertEqual(self.late_at(late, n=n), [None] * n)
 
   def test_the_last_proving_frame_still_counts_and_the_one_after_is_weather(self):
     n = model_state.PROVING_FRAMES
-    self.assertIsNotNone(self.late_at({n}, n=n)[-1])
-    self.assertEqual(self.late_at({n + 1}, n=n + 1), [None] * (n + 1))
+    allowed = model_state.PROVING_HOLDS_ALLOWED
+    late = set(range(n - 2 * allowed, n + 1, 2))   # the last of allowed + 1 is frame n
+    self.assertIsNotNone(self.late_at(late, n=n)[-1])
+    later = {f + 1 for f in late}
+    self.assertEqual(self.late_at(later, n=n + 1), [None] * (n + 1))
 
   def test_a_held_frame_while_settling_is_forgiven(self):
     # the first after a join carries the history reset, a Mac's is CoreML warm-up
     n = model_state.SETTLING_FRAMES
     self.assertEqual(self.late_at(set(range(2, n + 1)), n=n), [None] * n)
-    self.assertIsNotNone(self.late_at({n + 1}, n=n + 1)[-1])
+    # and spends nothing of the proving allowance
+    allowed = {n + 2 + 2 * i for i in range(model_state.PROVING_HOLDS_ALLOWED)}
+    proving = model_state.PROVING_FRAMES
+    self.assertEqual(self.late_at(set(range(2, n + 1)) | allowed, n=proving), [None] * proving)
 
   def test_a_host_that_keeps_up_proves_without_a_word(self):
     self.assertEqual(self.late_at(set(), n=model_state.PROVING_FRAMES + 5),
