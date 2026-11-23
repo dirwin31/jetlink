@@ -82,6 +82,12 @@ public protocol EngineBackend: AnyObject, Sendable {
   func describe() -> [String: String]
   func deriveSpec(model: URL, sha256: String, nbytes: Int64, frameSkip: Int) throws -> ModelSpec
   func build(model: URL, artifact: URL, report: @escaping ProgressFn, metaExtra: [String: Any]) throws
+  /// `build`, ending early with an error once `shouldStop` says so: an
+  /// add-on's build gives the device up to the driving model's. A backend
+  /// that cannot stop a build part way runs it to its end.
+  func build(
+    model: URL, artifact: URL, report: @escaping ProgressFn, metaExtra: [String: Any], shouldStop: @escaping @Sendable () -> Bool
+  ) throws
   func load(artifact: URL, report: @escaping ProgressFn) throws -> any Engine
   /// What a model of `modelBytes` takes on disk with this backend, which a
   /// download and a build check before they start; nil for a backend with
@@ -111,6 +117,12 @@ extension EngineBackend {
 
   public func describe() -> [String: String] {
     ["backend": name, "runtime_version": runtimeVersion, "device": deviceTag()]
+  }
+
+  public func build(
+    model: URL, artifact: URL, report: @escaping ProgressFn, metaExtra: [String: Any], shouldStop: @escaping @Sendable () -> Bool
+  ) throws {
+    try build(model: model, artifact: artifact, report: report, metaExtra: metaExtra)
   }
 
 }
