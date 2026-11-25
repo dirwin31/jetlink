@@ -262,6 +262,21 @@ def test_timeouts_rest_the_link_only_when_they_repeat(tmp_path, no_threads, monk
   assert link.ready(TAG)
 
 
+def test_a_late_answer_says_how_late_and_the_hosts_share(tmp_path, no_threads, monkeypatch):
+  link = AddonLink(function(tmp_path), host_ready=lambda: False, clock=Clock())
+  link.handle(W.pack_hello([TAG]))
+  monkeypatch.setattr(link_mod, "REPLY_TIMEOUT_S", 0.001)
+  link._requests = SimpleNamespace(put_nowait=lambda msg: None)
+  image = np.zeros((3, 2, 2), np.uint8)
+  assert link.infer(TAG, image, 3) is None and link.stats["timeouts"] == 1
+  link.handle(W.pack_answer(link._seq, TAG, W.STATUS_OK, 42_000, np.zeros(3, np.float32).tobytes()))
+  link.handle(W.pack_answer(link._seq, TAG, W.STATUS_OK, 42_000, np.zeros(3, np.float32).tobytes()))   # once only
+  assert link.stats["late"] == 1
+  (late_ms, jetson_ms, write_ms, back_ms), = link.report()["late_replies"]
+  assert late_ms >= 0 and jetson_ms == 42.0 and write_ms is None and back_ms is None   # blocking writes have no write time
+  assert link.report()["late_replies"] == []
+
+
 def test_a_bad_answer_rests_the_link_at_once(tmp_path, no_threads):
   link = AddonLink(function(tmp_path), host_ready=lambda: False, clock=Clock())
   link.handle(W.pack_hello([TAG]))
@@ -514,6 +529,48 @@ def test_round_trips_can_be_taken_while_added(tmp_path):
   finally:
     stop.set()
     adder.join()
+
+
+def test_round_trips_report_the_legs_they_know():
+  trips = link_mod.RoundTrips()
+  trips.add(9000, 3000, (1.0, 5.0, 0.2))
+  trips.add(9000, 3000)
+  out = trips.take()
+  assert out["n"] == 2 and out["write_ms"] == 1.0 and out["back_ms"] == 5.0 and out["wake_p99_ms"] == 0.2
+  trips.add(9000, 3000)
+  assert "write_ms" not in trips.take()
+
+
+def test_legs_split_the_round_trip_around_the_hosts_share():
+  write_ms, back_ms = link_mod._legs(10.0, 10.002, 10.030, 20_000)
+  assert round(write_ms, 3) == 2.0 and round(back_ms, 3) == 8.0
+  assert link_mod._legs(10.0, None, 10.030, 20_000) == (None, None)
+
+
+def test_aio_writes_time_the_request_leg(tmp_path, monkeypatch):
+  from tests.aio_fakes import FakeAio
+
+  class Answering(FakeAio):
+    answered = False
+
+    def reap(self, min_nr=0, timeout=0.0):
+      out = super().reap(min_nr, timeout)
+      if out and not self.answered:
+        self.answered = True
+        seq, tag, *_ = W.unpack_request(bytes(self.wire))
+        link.handle(W.pack_answer(seq, tag, W.STATUS_OK, 1000, bytes(4)))
+      return out
+
+  monkeypatch.setattr(link_mod.sys, "platform", "linux")
+  monkeypatch.setattr(link_mod, "Aio", lambda fd, depth: Answering(None, depth))
+  link = AddonLink(function(tmp_path), host_ready=lambda: True)
+  link._threads_started = True
+  link._ensure_open()
+  link.handle(W.pack_hello([TAG]))
+  assert link.infer(TAG, np.zeros((3, 8, 8), np.uint8), 1) is not None
+  trips = link.round_trips.take()
+  assert trips["n"] == 1 and trips["write_ms"] >= 0 and "back_ms" in trips and trips["wake_ms"] >= 0
+  link._close()
 
 
 def test_two_threads_open_a_shared_link_once(tmp_path, monkeypatch):

@@ -166,7 +166,16 @@ comma asks for that a connected host lacks, a different file on each end most
 often), counts and round trips. Compare changes using the increase in
 `answered` divided by the increase in `eligible_attempts` at the same model
 cadence. A model attempt counts before busy and rest checks. `submit_ms`
-accumulates caller time spent submitting AIO writes.
+accumulates caller time spent submitting AIO writes. `late` counts answers
+that came after their request timed out, and `late_replies` lists each since the
+last report as `[ms past the deadline, the host's own ms, write ms, back ms]`.
+`round_trips` splits answered requests the same way, as medians and p99s:
+`write` is the comma's write until the host has taken the whole request,
+`back` the rest of the trip less the host's own share (its write, the bus and
+the comma's reader), and `wake` the caller waking to the answer. A large host
+share means the host was slow; a large `write` or `back` means the bus or the
+comma. Write and back are null without AIO writes.
+Timeouts with no late answer never got one.
 
 The client asks only while the link is live: a hello or an answer in the last
 2.5 s, a hello that lists the model and does not say yielding, no write in
