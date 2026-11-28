@@ -31,6 +31,10 @@ public enum OrtProfile: String, CaseIterable, Sendable {
   /// heads in fp32): what a phone, whose GPU is far weaker than its Neural
   /// Engine, wants.
   case aneWhole = "ane-whole"
+  /// The whole graph on the Neural Engine and the CPU, prepared as `coreml`
+  /// is. Never offered: it is what an add-on's model runs on beside a driving
+  /// model on `ane-both`, so the GPU stays idle there too (`wholeModel`).
+  case aneModel = "ane-model"
   /// The vision trunk on the Hexagon NPU in fp16, everything after it on the
   /// Adreno GPU.
   case htp
@@ -62,6 +66,7 @@ public enum OrtProfile: String, CaseIterable, Sendable {
     case .aneBoth: [("vision", .coreML("CPUAndNeuralEngine")), ("policy", .coreML("CPUAndNeuralEngine"))]
     case .coreml: [("model", .coreML("CPUAndGPU"))]
     case .aneWhole: [("model", .coreML("ALL"))]
+    case .aneModel: [("model", .coreML("CPUAndNeuralEngine"))]
     case .htp: [("vision", .htp), ("policy", .qnnGPU)]
     case .htpWhole: [("model", .htp)]
     case .gpu: [("model", .qnnGPU)]
@@ -78,7 +83,7 @@ public enum OrtProfile: String, CaseIterable, Sendable {
     switch self {
     case .ane, .aneBoth, .htp: .split
     case .aneWhole, .htpWhole: .aneWhole
-    case .coreml, .gpu: .whole
+    case .coreml, .gpu, .aneModel: .whole
     case .cpu:
       #if os(Android)
         .plain
@@ -217,10 +222,12 @@ public final class OrtBackend: EngineBackend {
   }
 
   /// The same backend on a one-session profile, for a model that is not a
-  /// driving model and cannot be split (an add-on's).
+  /// driving model and cannot be split (an add-on's), on the units the
+  /// driving model's policy runs on: the Neural Engine for `ane-both`, which
+  /// keeps the GPU idle, the GPU for `ane` and `htp`, which use it anyway.
   public func wholeModel() -> OrtBackend {
     guard profile.sessions.count > 1 else { return self }
-    let whole: OrtProfile = profile.usesCoreML ? .coreml : .gpu
+    let whole: OrtProfile = profile == .aneBoth ? .aneModel : profile.usesCoreML ? .coreml : .gpu
     return OrtBackend(profile: whole, preparer: preparer, keepAlive: keepAlive, keepCPUWarm: keepCPUWarm, chip: chip)
   }
 

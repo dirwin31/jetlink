@@ -1,6 +1,5 @@
 // The add-on server: a fork's own models beside the driving model, each on its
-// own interface of the comma's gadget. docs/addons.md. From Peter Nguyen's
-// V-ASM and sign-vision servers (trung791997/openpilot).
+// own interface of the comma's gadget. docs/addons.md.
 import Foundation
 import JetlinkKit
 

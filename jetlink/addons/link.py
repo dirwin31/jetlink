@@ -32,8 +32,7 @@ FunctionFS transfers are synchronous and a signal inside one loses bytes
 also allocates one contiguous kernel buffer per call, so reads go in 16 KB
 pieces, a message ending at the first short one, and writes in 8 KB pieces.
 An endpoint file is closed only once no thread is inside a call on it, so its
-number is never reused under one. numpy and the standard library only. From Peter Nguyen's V-ASM and sign-vision clients
-(trung791997/openpilot).
+number is never reused under one. numpy and the standard library only.
 """
 from __future__ import annotations
 

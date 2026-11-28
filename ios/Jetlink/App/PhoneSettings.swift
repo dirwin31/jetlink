@@ -130,8 +130,8 @@ extension OrtProfile {
     case .aneBoth: "Neural Engine Only"
     case .coreml: "GPU Only"
     case .cpu: "CPU"
-    // the Mac's and Android's, never offered here
-    case .aneWhole, .htp, .htpWhole, .gpu: rawValue
+    // the Mac's and Android's, and the add-ons' own, never offered here
+    case .aneWhole, .aneModel, .htp, .htpWhole, .gpu: rawValue
     }
   }
 }

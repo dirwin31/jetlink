@@ -168,17 +168,13 @@ often), counts and round trips. Compare changes using the increase in
 cadence. A model attempt counts before busy and rest checks. `submit_ms`
 accumulates caller time spent submitting AIO writes. `late` counts answers
 that came after their request timed out, and `late_replies` lists each since the
-last report as `[ms past the deadline, the host's own ms, write ms, back ms,
-reader CPU wait ms, caller CPU wait ms, 1-minute load]`.
+last report as `[ms past the deadline, the host's own ms, write ms, back ms]`.
 `round_trips` splits answered requests the same way, as medians and p99s:
 `write` is the comma's write until the host has taken the whole request,
 `back` the rest of the trip less the host's own share (its write, the bus and
-the comma's reader), `wake` the caller waking to the answer, and `rx_wait` and
-`caller_wait` the time the reader and the caller sat runnable without a CPU
-over the request (the thread's `schedstat`). A large host share means the host
-was slow; a large `write` or `back` means the bus or the comma, and a large
-CPU wait the comma's scheduler. Write and back are null without AIO writes,
-the CPU waits off Linux.
+the comma's reader), and `wake` the caller waking to the answer. A large host
+share means the host was slow; a large `write` or `back` means the bus or the
+comma. Write and back are null without AIO writes.
 Timeouts with no late answer never got one.
 
 The client asks only while the link is live: a hello or an answer in the last
@@ -285,9 +281,11 @@ how long a pass takes, what the comma had since the server started, Answering
 while it had an answer in the last 5 s, and the models building or that this
 computer cannot run, with why.
 
-On a Mac, `jetlink-server serve --usb`. The add-on models build
-on onnxruntime's one-session CoreML profile, since the Neural Engine profile
-splits a driving model in two.
+On a Mac, `jetlink-server serve --usb`. An add-on's model runs whole, as
+the split profiles cut only a driving model, on the units the driving model's
+policy runs on: the Neural Engine beside `ane-both` (its own `ane-model`
+profile, never offered), so Neural Engine Only keeps the GPU idle; the GPU
+beside `ane` and `coreml` on Apple and `htp` and `gpu` on Android.
 
 ## The wire
 

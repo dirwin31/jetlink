@@ -21,8 +21,6 @@ host answers only for the exact file the comma checked. A message whose length
 is a multiple of 512 carries one zero byte more: a bulk transfer of whole
 packets has no end the other side can see without a zero-length packet, and
 neither end sends one.
-
-From Peter Nguyen's V-ASM and sign-vision wires (trung791997/openpilot).
 """
 from __future__ import annotations
 

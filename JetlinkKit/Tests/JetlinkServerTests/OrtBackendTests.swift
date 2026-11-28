@@ -23,6 +23,7 @@ struct OrtBackendTests {
       (.aneBoth, ["vision", "policy"], [.coreML("CPUAndNeuralEngine"), .coreML("CPUAndNeuralEngine")], "split"),
       (.coreml, ["model"], [.coreML("CPUAndGPU")], "whole"),
       (.aneWhole, ["model"], [.coreML("ALL")], "aneWhole"),
+      (.aneModel, ["model"], [.coreML("CPUAndNeuralEngine")], "whole"),
       (.htp, ["vision", "policy"], [.htp, .qnnGPU], "split"),
       (.htpWhole, ["model"], [.htp], "aneWhole"),
       (.gpu, ["model"], [.qnnGPU], "whole"),
@@ -54,6 +55,17 @@ struct OrtBackendTests {
     #else
       #expect(OrtProfile.available == [.cpu])
     #endif
+  }
+
+  @Test("An add-on's model runs whole on the units the driving model's policy runs on")
+  func wholeModel() {
+    let expected: [(OrtProfile, OrtProfile)] = [
+      (.ane, .coreml), (.aneBoth, .aneModel), (.aneWhole, .aneWhole), (.coreml, .coreml), (.htp, .gpu), (.htpWhole, .htpWhole),
+      (.gpu, .gpu), (.cpu, .cpu),
+    ]
+    for (driving, addon) in expected {
+      #expect(OrtBackend(profile: driving, preparer: ONNXPreparer()).wholeModel().profile == addon, "\(driving)")
+    }
   }
 
   @Test("Where it prepares for CoreML, the backend says what a model takes on disk")
