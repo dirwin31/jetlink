@@ -589,7 +589,7 @@ struct AddonTests {
       try client.sendJSON(.engineReq, ["sha256": Self.addonSHA, "nbytes": 10, "addon": ["interface": "ff/54/59"]])
       let reply = try client.recv()
       #expect(reply.type == Wire.Msg.error.rawValue)
-      #expect(try reply.json["error"] as? String == "no_addons")
+      #expect(reply.json["error"] as? String == "no_addons")
     }
   }
 }

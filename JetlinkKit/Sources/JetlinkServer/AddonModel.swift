@@ -185,6 +185,13 @@ final class AddonModel: @unchecked Sendable {
     // the driving model's job is waiting for the device this build holds
     let yielding: @Sendable () -> Bool = { host?.drivingBusy ?? false }
     func build() throws {
+      // as for a driving model: a build whose files cannot fit fails part way
+      // in CoreML, so it is refused first, and sent again once there is room
+      if let need = backend.storageNeed(modelBytes: Files.size(of: file)), let free = Files.freeBytes(at: root),
+        let short = need.shortfall(for: .prepare, free: free, name: name), short.blocking
+      {
+        throw AddonDeferred(short.message)
+      }
       log.info("building \(name) for \(backend.name)")
       do {
         try backend.build(model: file, artifact: entry.path, report: report, metaExtra: meta, shouldStop: yielding)

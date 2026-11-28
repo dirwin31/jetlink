@@ -180,7 +180,7 @@ the owner calls once as it starts; `params` reads the params store as files
   class Adapter(Stock):
     @classmethod
     def gadget_functions(cls, params):
-      return (VASM.function,) if params.get_bool('MyForkVasmOnJetson') else ()
+      return (mymodel().function,) if params.get_bool('MyForkModelOnJetson') else ()
 ```
 
 A change takes effect when the owner next starts, a reboot most simply.

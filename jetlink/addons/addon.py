@@ -6,15 +6,15 @@ See the LICENSE file in the root directory for more details.
 
 A fork's add-on, declared once (docs/addons.md, "Offload a model"):
 
-    def vasm():
-      return Addon('vasm', (0xFF, 0x56, 0x41), setting='MyForkVasmOnJetson',
-                   models=(('V-ASM', MODELS / 'v_asm.onnx', 'sha256 of that file'),))
+    def mymodel():
+      return Addon('mymodel', (0xFF, 0x4D, 0x4D), setting='MyForkModelOnJetson',
+                   models=(('My Model', MODELS / 'my_model.onnx', 'sha256 of that file'),))
 
     class Adapter(Stock):
-      ADDONS = (vasm(),)                   # the gadget, the provisioning run and the setting's watch
+      ADDONS = (mymodel(),)                   # the gadget, the provisioning run and the setting's watch
 
-    net = vasm().wrap(cv2.dnn.readNetFromONNX(path), sha256, [('output0', (1, 3))], params=Params(), scaled_u8=True)
-    run = vasm().model(lambda blob: session.run(None, {'images': blob}), sha256, [('output0', (1, 3))], params=Params())
+    net = mymodel().wrap(cv2.dnn.readNetFromONNX(path), sha256, [('output0', (1, 3))], params=Params(), scaled_u8=True)
+    run = mymodel().model(lambda blob: session.run(None, {'images': blob}), sha256, [('output0', (1, 3))], params=Params())
 
 From then on the setting turns it on and off live, a parked provisioning run
 sends the Jetson its models, the Jetson serves them, and the comma runs the

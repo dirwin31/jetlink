@@ -21,9 +21,9 @@ SIGTERM, so every long wait polls `stop`; the server's build thread carries on
 regardless and modeld picks the engine up over its own link.
 
 A server whose hello lists `addons` is sent the fork's add-on models it has
-neither ready nor failed (Stock.addon_models), once the driving model is
-ready, over the same link and the same upload, and builds them there; the
-hello after says what it has now, so the owner's record does too.
+neither ready nor failed (Stock.addon_models), after the driving model
+whatever came of it, over the same link and the same upload, and builds them
+there; the hello after says what it has now, so the owner's record does too.
 
 What the owner cannot learn for itself it hears from the run: the server's
 hello, passed on over the loan (lending.Loan.note_server), and whether the

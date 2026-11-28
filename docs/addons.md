@@ -25,14 +25,14 @@ def _adapter_class():
   from jetlink.openpilot.stock import Stock
 
   class Adapter(Stock):
-    ADDONS = (vasm(),)
+    ADDONS = (mymodel(),)
   return Adapter
 
 
-def vasm():
+def mymodel():
   from jetlink.addons.addon import Addon
-  return Addon('vasm', (0xFF, 0x56, 0x41), setting='MyForkVasmOnJetson',
-               models=(('V-ASM', BASEDIR / 'models/v_asm_model.onnx', V_ASM_SHA256),))
+  return Addon('mymodel', (0xFF, 0x4D, 0x4D), setting='MyForkModelOnJetson',
+               models=(('My Model', BASEDIR / 'models/my_model.onnx', MY_MODEL_SHA256),))
 ```
 
 - `name`: 1 to 16 of `a-z0-9`, the gadget function's name.
@@ -55,7 +55,7 @@ on, and watches their settings. A fork that needs more overrides
 
 ```python
 net = cv2.dnn.readNetFromONNX(path)
-net = vasm().wrap(net, V_ASM_SHA256, [('output0', (1, 3))], params=Params(), scaled_u8=True)
+net = mymodel().wrap(net, MY_MODEL_SHA256, [('output0', (1, 3))], params=Params(), scaled_u8=True)
 ```
 
 `outputs` names every graph output with its shape, the one `forward()` returns
@@ -76,7 +76,7 @@ Any other runtime (onnxruntime, tinygrad) wraps its own run as a call that
 returns every output in `outputs` order:
 
 ```python
-run = vasm().model(lambda blob: session.run(['output0'], {'images': blob}), V_ASM_SHA256, [('output0', (1, 3))],
+run = mymodel().model(lambda blob: session.run(['output0'], {'images': blob}), MY_MODEL_SHA256, [('output0', (1, 3))],
                    params=Params(), scaled_u8=True)
 (scores,) = run(blob)
 ```
@@ -88,8 +88,8 @@ server's hello and the fork's progress param:
 
 ```python
 from jetlink.comma import gadget
-state = vasm().state(gadget.read_record(gadget.SERVER), params.get('JetlinkProgress'))
-# {'host': 'ready' | 'missing' | 'failed' | 'unsupported' | None, 'preparing': 'V-ASM: build 40%' or ''}
+state = mymodel().state(gadget.read_record(gadget.SERVER), params.get('JetlinkProgress'))
+# {'host': 'ready' | 'missing' | 'failed' | 'unsupported' | None, 'preparing': 'My Model: build 40%' or ''}
 ```
 
 `host` is the server, whichever platform serves it. `ready` means it serves
@@ -168,13 +168,17 @@ often), counts and round trips. Compare changes using the increase in
 cadence. A model attempt counts before busy and rest checks. `submit_ms`
 accumulates caller time spent submitting AIO writes. `late` counts answers
 that came after their request timed out, and `late_replies` lists each since the
-last report as `[ms past the deadline, the host's own ms, write ms, back ms]`.
+last report as `[ms past the deadline, the host's own ms, write ms, back ms,
+reader CPU wait ms, caller CPU wait ms, 1-minute load]`.
 `round_trips` splits answered requests the same way, as medians and p99s:
 `write` is the comma's write until the host has taken the whole request,
 `back` the rest of the trip less the host's own share (its write, the bus and
-the comma's reader), and `wake` the caller waking to the answer. A large host
-share means the host was slow; a large `write` or `back` means the bus or the
-comma. Write and back are null without AIO writes.
+the comma's reader), `wake` the caller waking to the answer, and `rx_wait` and
+`caller_wait` the time the reader and the caller sat runnable without a CPU
+over the request (the thread's `schedstat`). A large host share means the host
+was slow; a large `write` or `back` means the bus or the comma, and a large
+CPU wait the comma's scheduler. Write and back are null without AIO writes,
+the CPU waits off Linux.
 Timeouts with no late answer never got one.
 
 The client asks only while the link is live: a hello or an answer in the last
@@ -194,7 +198,7 @@ waits for its own queued writes to settle before reopening.
 ## Provisioning
 
 A server that serves add-ons says so in its hello: `addons`, `{serving,
-failed}`. `serving` maps each interface class (`"ff/56/41"`) to the sha256s
+failed}`. `serving` maps each interface class (`"ff/4d/4d"`) to the sha256s
 answered there; `failed` is by sha256, as a model's limits are its own. A model
 built once is served on each interface that asks for it, from the one engine,
 and ready on an interface only once it is asked for there.
@@ -267,12 +271,12 @@ A model takes one `[1, C, H, W]` input, float, fp16 or uint8, and gives any
 number of float outputs. Its tag on the wire is the first four bytes of the
 ONNX's sha256, so the comma and the server need the same file.
 
-`jetlink logs` shows each model built, then `serving interface class ff/56/41`
+`jetlink logs` shows each model built, then `serving interface class ff/4d/4d`
 and, once a minute until the first answer, `no answer yet, N request bytes
 received so far` with the link's last error: 0 bytes means the comma's
 requests are not reaching the server.
 A minute's counts follow: passes, yields, failures and each model's cost.
-An add-on turned off logs `the comma turned V-ASM off, no longer serving it`,
+An add-on turned off logs `the comma turned My Model off, no longer serving it`,
 then `deleted <sha>: no add-on wants it` once nothing serves the model.
 
 The web page's **Models** tab has an **Add-ons** card, read from
