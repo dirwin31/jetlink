@@ -433,7 +433,7 @@ public final class EngineHost: @unchecked Sendable {
       let loaded = try Ticker.during(interval: 1, Ticker.paced("warm", "warming up", took: 0, report: progressFn)) {
         try warm(warming, spec: ready)
       }
-      recordNeuralEngineCopies(entry, before: neuralEngineBefore)
+      Self.recordNeuralEngineCopies(entry, before: neuralEngineBefore)
       cache.pruneStale(protect: entry.path)
       engine = nil
       lock.lock()
@@ -505,8 +505,9 @@ public final class EngineHost: @unchecked Sendable {
 
   /// The Neural Engine's compiled copies this build and load added, kept in
   /// the artifact's sidecar so they go with it (NeuralEngineCache): gigabytes
-  /// that nothing else names. A copy CoreML reused adds nothing.
-  private func recordNeuralEngineCopies(_ entry: CacheEntry, before: Set<String>) {
+  /// that nothing else names. A copy CoreML reused adds nothing. An add-on's
+  /// build and load record theirs the same way (AddonModel.prepare).
+  static func recordNeuralEngineCopies(_ entry: CacheEntry, before: Set<String>) {
     let added = NeuralEngineCache.bundles().subtracting(before)
     guard !added.isEmpty else { return }
     var meta = Artifact.sidecar(entry.path)

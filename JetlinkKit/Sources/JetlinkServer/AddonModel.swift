@@ -200,6 +200,9 @@ final class AddonModel: @unchecked Sendable {
         throw AddonDeferred("\(name): its build stopped for the driving model's; it is built on the next park")
       }
     }
+    // what the Neural Engine has compiled so far, to tell what this build or load adds
+    NeuralEngineCache.forgetUntracked()
+    let neuralEngineBefore = NeuralEngineCache.bundles()
     if !entry.exists { try build() }
     let engine: any Engine
     do {
@@ -220,6 +223,7 @@ final class AddonModel: @unchecked Sendable {
         try model.calibrate()
         return "\(warmed)"
       }()
+      EngineHost.recordNeuralEngineCopies(entry, before: neuralEngineBefore)
       log.info(
         "\(warmed); \(name) takes \(model.shape), gives \(model.outputs.map { "\($0.name)\($0.shape)" }), a pass \(String(format: "%.1f", Double(model.costNs) / 1e6)) ms"
       )
